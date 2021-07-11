@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 
+// TODO: setup traits that all entries would inherit from
 pub struct Root {
     entries: Vec<Entry>,
 }
@@ -15,15 +16,22 @@ impl Root {
     }
 }
 
-// Move the name and permissions up here since it's common to all?
+#[derive(Default)]
+struct CommonProp {
+    name: Option<String>,
+    permissions: Option<fs::Permissions>,
+}
+
 pub enum Entry {
     Dir(Dir),
     File(File),
     BrokenSymlink(BrokenSymlink),
 }
 
+#[derive(Default)]
 pub struct Dir {
     kind: DirKind,
+    common_prop: CommonProp,
     prop: DirProp,
 }
 
@@ -32,10 +40,14 @@ enum DirKind {
     Symlink,
 }
 
+impl Default for DirKind {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
 #[derive(Default)]
 struct DirProp {
-    name: Option<String>,
-    permissions: Option<fs::Permissions>,
     entries: Vec<Entry>,
 }
 
@@ -43,7 +55,7 @@ impl Dir {
     fn _new(kind: DirKind) -> Self {
         Self {
             kind,
-            prop: DirProp::default(),
+            ..Self::default()
         }
     }
 
@@ -56,12 +68,12 @@ impl Dir {
     }
 
     pub fn name(mut self, name: String) -> Self {
-        self.prop.name = Some(name);
+        self.common_prop.name = Some(name);
         self
     }
 
     pub fn permissions(mut self, dir_permissions: fs::Permissions) -> Self {
-        self.prop.permissions = Some(dir_permissions);
+        self.common_prop.permissions = Some(dir_permissions);
         self
     }
 
@@ -75,8 +87,10 @@ impl Dir {
     }
 }
 
+#[derive(Default)]
 pub struct File {
     kind: FileKind,
+    common_prop: CommonProp,
     prop: FileProp,
 }
 
@@ -87,6 +101,12 @@ enum FileKind {
     Custom(Box<dyn Iterator<Item = u8>>),
 }
 
+impl Default for FileKind {
+    fn default() -> Self {
+        Self::Random(None)
+    }
+}
+
 pub enum FileSize {
     Fixed(u64),
     Uniform(u64, u64),
@@ -94,8 +114,6 @@ pub enum FileSize {
 
 #[derive(Default)]
 struct FileProp {
-    name: Option<String>,
-    permissions: Option<fs::Permissions>,
     size: Option<FileSize>,
 }
 
@@ -103,7 +121,7 @@ impl File {
     fn new(kind: FileKind) -> Self {
         Self {
             kind,
-            prop: FileProp::default(),
+            ..Self::default()
         }
     }
 
@@ -127,8 +145,13 @@ impl File {
         Self::new(FileKind::Custom(contents_iter))
     }
 
+    pub fn name(mut self, name: String) -> Self {
+        self.common_prop.name = Some(name);
+        self
+    }
+
     pub fn permissions(mut self, file_permissions: fs::Permissions) -> Self {
-        self.prop.permissions = Some(file_permissions);
+        self.common_prop.permissions = Some(file_permissions);
         self
     }
 
@@ -137,35 +160,28 @@ impl File {
         self
     }
 
-    pub fn try_build_at(self, at: &Path) -> Result<(), ()> {
+    fn try_build_at(self, at: &Path) -> Result<(), ()> {
         todo!()
     }
 }
 
-pub struct BrokenSymlink {
-    prop: BrokenSymlinkProp,
-}
-
 #[derive(Default)]
-struct BrokenSymlinkProp {
-    name: Option<String>,
-    permissions: Option<fs::Permissions>,
+pub struct BrokenSymlink {
+    common_prop: CommonProp,
 }
 
 impl BrokenSymlink {
     pub fn new() -> Self {
-        Self {
-            prop: BrokenSymlinkProp::default(),
-        }
+        Self::default()
     }
 
     pub fn name(mut self, name: String) -> Self {
-        self.prop.name = Some(name);
+        self.common_prop.name = Some(name);
         self
     }
 
     pub fn permissions(mut self, broken_symlink_permissions: fs::Permissions) -> Self {
-        self.prop.permissions = Some(broken_symlink_permissions);
+        self.common_prop.permissions = Some(broken_symlink_permissions);
         self
     }
 
@@ -182,12 +198,4 @@ fn goals() {
                 .entry(Entry::File(File::random())),
         ))
         .entry(Entry::File(File::random()));
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }
