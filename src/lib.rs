@@ -1,18 +1,42 @@
-use std::{fs, path::Path};
+use std::{fs, io, path::Path};
 
-// TODO: setup traits that all entries would inherit from
+use tempdir::TempDir;
+
+// TODO: setup properties that all entries would inherit from
 pub struct Root {
-    entries: Vec<Entry>,
+    at: TempDir,
 }
 
 impl Root {
+    pub fn builder() -> RootBuilder {
+        RootBuilder::default()
+    }
+}
+
+#[derive(Default)]
+pub struct RootBuilder {
+    entries: Vec<Entry>,
+}
+
+impl RootBuilder {
     pub fn new() -> Self {
-        todo!()
+        Self::default()
     }
 
     pub fn entry(mut self, entry: Entry) -> Self {
         self.entries.push(entry);
         self
+    }
+
+    pub fn try_build(self) -> Result<Root, io::Error> {
+        // TODO: allow for user specified prefix
+        let temp_dir = TempDir::new("rand-dir")?;
+        let root_path = temp_dir.path();
+        for entry in self.entries {
+            entry.try_build_at(root_path)?;
+        }
+
+        Ok(Root { at: temp_dir })
     }
 }
 
@@ -26,6 +50,16 @@ pub enum Entry {
     Dir(Dir),
     File(File),
     BrokenSymlink(BrokenSymlink),
+}
+
+impl Entry {
+    fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
+        match self {
+            Entry::Dir(entry) => entry.try_build_at(at),
+            Entry::File(entry) => entry.try_build_at(at),
+            Entry::BrokenSymlink(entry) => entry.try_build_at(at),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -82,7 +116,7 @@ impl Dir {
         self
     }
 
-    fn try_build_at(self, at: &Path) -> Result<(), ()> {
+    fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
         todo!()
     }
 }
@@ -160,7 +194,7 @@ impl File {
         self
     }
 
-    fn try_build_at(self, at: &Path) -> Result<(), ()> {
+    fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
         todo!()
     }
 }
@@ -185,17 +219,17 @@ impl BrokenSymlink {
         self
     }
 
-    pub fn try_build_at(self, at: &Path) -> Result<(), ()> {
+    pub fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
         todo!()
     }
 }
 
 fn goals() {
-    let rand_dir = Root::new()
+    let rand_dir = Root::builder()
         .entry(Entry::Dir(
             Dir::new()
-                .entry(Entry::File(File::random()))
-                .entry(Entry::File(File::random())),
+                .entry(Entry::File(File::default()))
+                .entry(Entry::File(File::default())),
         ))
-        .entry(Entry::File(File::random()));
+        .entry(Entry::File(File::default()));
 }
