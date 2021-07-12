@@ -3,14 +3,13 @@
 use std::{
     fmt, fs,
     io::{self, Write},
-    os::unix::prelude::FileExt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
 use once_cell::sync::Lazy;
 use petname::petname;
-use rand::{distributions::Uniform, random, thread_rng, Rng};
+use rand::{random, thread_rng, Rng};
 use tempdir::TempDir;
 
 // Since the symlinks and broken symlinks all point to entries stored in the same directory so to
@@ -245,15 +244,9 @@ impl Default for FileKind {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum FileSize {
-    Fixed(usize),
-    Uniform(usize, usize),
-}
-
 #[derive(Default, Debug, Clone)]
 struct FileProp {
-    size: Option<FileSize>,
+    size: Option<usize>,
 }
 
 impl File {
@@ -282,7 +275,7 @@ impl File {
 
     pub fn custom(contents: Vec<u8>) -> Self {
         let contents_len = contents.len();
-        Self::new(FileKind::Custom(contents)).size(FileSize::Fixed(contents_len))
+        Self::new(FileKind::Custom(contents)).size(contents_len)
     }
 
     pub fn name(mut self, name: String) -> Self {
@@ -295,7 +288,7 @@ impl File {
         self
     }
 
-    pub fn size(mut self, file_size: FileSize) -> Self {
+    pub fn size(mut self, file_size: usize) -> Self {
         self.prop.size = Some(file_size);
         self
     }
@@ -309,10 +302,6 @@ impl File {
 
         // Figure out the content size
         let size = maybe_size.unwrap_or_else(|| todo!());
-        let contents_len = match size {
-            FileSize::Fixed(len) => len,
-            FileSize::Uniform(lower, upper) => todo!(),
-        };
 
         // Create the file and write the contents
         let file_name = name.unwrap_or_else(|| {
@@ -340,7 +329,7 @@ impl File {
             }
             FileKind::Custom(custom_contents) => Box::new(custom_contents.into_iter()),
         };
-        let contents: Vec<_> = contents_iter.take(contents_len).collect();
+        let contents: Vec<_> = contents_iter.take(size).collect();
 
         let file_loc = at.join(file_name);
         let mut file = fs::File::create(file_loc)?;

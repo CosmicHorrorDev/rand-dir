@@ -1,18 +1,18 @@
 use std::io;
 
-use rand_dir::{Dir, Entry, File, FileSize, RandDir};
+use rand_dir::{Dir, Entry, File, RandDir};
 
 pub fn main() {
-    let kibibyte = FileSize::Fixed(1_024);
+    let kibibyte = 1_024;
 
     let rand_dir = RandDir::builder()
         .entry(Entry::Dir(
             Dir::real()
-                .entry(Entry::File(File::zeroed().size(kibibyte.clone())))
-                .entry(Entry::File(File::oned().size(kibibyte.clone()))),
+                .entry(Entry::File(File::zeroed().size(kibibyte)))
+                .entry(Entry::File(File::oned().size(kibibyte))),
         ))
         .entry(Entry::Dir(
-            Dir::symlink().entry(Entry::File(File::random().size(kibibyte.clone()))),
+            Dir::symlink().entry(Entry::File(File::random().size(kibibyte))),
         ))
         .entry(Entry::File(File::custom(b"Hello, World!".to_vec())))
         .try_build()
