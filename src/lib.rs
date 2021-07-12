@@ -10,6 +10,11 @@ use std::{
 use petname::petname;
 use tempdir::TempDir;
 
+// Since the symlinks and broken symlinks all point to entries stored in the same directory so to
+// prevent naming conflicts the entries are made unique with a globally incremented counter
+static GLOBAL_SYMLINK_COUNTER: usize = 1;
+static GLOBAL_BROKEN_SYMLINK_COUNTER: usize = 1;
+
 // TODO: setup properties that all entries would inherit from
 #[derive(Debug)]
 pub struct RandDir {
@@ -84,6 +89,8 @@ struct CommonProp {
     permissions: Option<fs::Permissions>,
 }
 
+// TODO: could store common stuff in here instead of having it duplicated in all the entries. This
+// does make the api a bit weirder unless we do delegate methods or something like that though
 #[derive(Debug, Clone)]
 pub enum Entry {
     Dir(Dir),
@@ -126,19 +133,19 @@ struct DirProp {
 }
 
 impl Dir {
-    fn _new(kind: DirKind) -> Self {
+    fn new(kind: DirKind) -> Self {
         Self {
             kind,
             ..Self::default()
         }
     }
 
-    pub fn new() -> Self {
-        Self::_new(DirKind::Normal)
+    pub fn real() -> Self {
+        Self::new(DirKind::Normal)
     }
 
     pub fn symlink() -> Self {
-        Self::_new(DirKind::Symlink)
+        Self::new(DirKind::Symlink)
     }
 
     pub fn name(mut self, name: String) -> Self {
@@ -302,9 +309,20 @@ impl File {
             FileSize::Uniform(lower, upper) => todo!(),
         };
 
+        // Create the file and write the contents
+        let file_name = name.unwrap_or_else(|| {
+            let prefix = "file-";
+            let suffix = match &kind {
+                FileKind::Zeroed => ".zeroed",
+                FileKind::Oned => ".oned",
+                FileKind::Random(_) => ".random",
+                FileKind::Custom(_) => ".custom",
+            };
+            format!("{}{}{}", prefix, petname(3, "-"), suffix)
+        });
+
         // TODO: this can be more efficient, just need to find a good way to handle streaming data
         // from the iterator to the file
-        // Get the contents
         let contents_iter: Box<dyn Iterator<Item = u8>> = match kind {
             FileKind::Zeroed => Box::new(std::iter::repeat(0x00)),
             FileKind::Oned => Box::new(std::iter::repeat(0xFF)),
@@ -314,11 +332,6 @@ impl File {
         };
         let contents: Vec<_> = contents_iter.take(contents_len).collect();
 
-        // Create the file and write the contents
-        let file_name = name.unwrap_or_else(|| {
-            let prefix = "file-";
-            format!("{}{}", prefix, petname(3, "-"))
-        });
         let file_loc = at.join(file_name);
         let mut file = fs::File::create(file_loc)?;
         file.write_all(&contents)?;

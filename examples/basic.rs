@@ -5,7 +5,7 @@ pub fn main() {
 
     let rand_dir = RandDir::builder()
         .entry(Entry::Dir(
-            Dir::new()
+            Dir::real()
                 .entry(kibibyte_zeroed_file.clone())
                 .entry(kibibyte_zeroed_file.clone()),
         ))
