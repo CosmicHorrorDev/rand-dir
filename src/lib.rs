@@ -5,14 +5,16 @@ use std::{
     io::{self, Write},
     os::unix::prelude::FileExt,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
+use once_cell::sync::Lazy;
 use petname::petname;
 use tempdir::TempDir;
 
 // Since the symlinks and broken symlinks all point to entries stored in the same directory so to
 // prevent naming conflicts the entries are made unique with a globally incremented counter
-static GLOBAL_SYMLINK_COUNTER: usize = 1;
+static GLOBAL_SYMLINK_COUNTER: Lazy<Arc<Mutex<usize>>> = Lazy::new(|| Arc::new(Mutex::new(1)));
 static GLOBAL_BROKEN_SYMLINK_COUNTER: usize = 1;
 
 // TODO: setup properties that all entries would inherit from
@@ -172,13 +174,15 @@ impl Dir {
         } = self;
 
         // TODO: handle the case of a duplicate name
-        let dir_name = name.unwrap_or_else(|| {
-            let prefix = match kind {
-                DirKind::Normal => "dir-",
-                DirKind::Symlink => "symlink-",
-            };
+        let dir_name = name.unwrap_or_else(|| match kind {
+            DirKind::Normal => format!("dir-{}", petname(3, "-")),
+            DirKind::Symlink => {
+                let mut symlink_counter = GLOBAL_SYMLINK_COUNTER.lock().unwrap();
+                let current_val = *symlink_counter;
+                *symlink_counter += 1;
 
-            format!("{}{}", prefix, petname(3, "-"))
+                format!("symlink-dest-{}", current_val)
+            }
         });
 
         // A regular directory will just have it's contents made in `at` while a symlink will have
@@ -196,10 +200,10 @@ impl Dir {
         }
 
         // TODO: have this support windows too
-        // Now actually link the symlink
+        // Now actually create the symlink
         if let DirKind::Symlink = kind {
             let original = dir_loc;
-            let link = at.join(&dir_name);
+            let link = at.join(&format!("symlink-{}", petname(3, "-")));
             std::os::unix::fs::symlink(original, link)?;
         }
 
