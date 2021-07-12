@@ -14,7 +14,7 @@ pub fn main() {
         .entry(Entry::Dir(
             Dir::symlink().entry(Entry::File(File::random().size(kibibyte))),
         ))
-        .entry(Entry::File(File::custom(b"Hello, World!".to_vec())))
+        .entry(Entry::File(File::custom(*b"Hello, World!")))
         .try_build()
         .unwrap();
 

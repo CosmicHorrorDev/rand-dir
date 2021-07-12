@@ -1,7 +1,5 @@
-// TODO: use globally increasing counters for symlinks and broken symlinks
-
 use std::{
-    fmt, fs,
+    fs,
     io::{self, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -35,7 +33,7 @@ impl RandDir {
 }
 
 // TODO: store an Rng here to propogate down to entries
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct RandDirBuilder {
     entries: Vec<Entry>,
 }
@@ -91,6 +89,8 @@ struct CommonProp {
     permissions: Option<fs::Permissions>,
 }
 
+// TODO: can this be done with traits instead so that people aren't having to setup the enum
+// variants or are there some limitations that I'm not thinking of
 // TODO: could store common stuff in here instead of having it duplicated in all the entries. This
 // does make the api a bit weirder unless we do delegate methods or something like that though
 #[derive(Debug, Clone)]
@@ -117,7 +117,7 @@ pub struct Dir {
     prop: DirProp,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum DirKind {
     Normal,
     Symlink,
@@ -218,24 +218,12 @@ pub struct File {
     prop: FileProp,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum FileKind {
     Zeroed,
     Oned,
     Random(Option<u64>),
     Custom(Vec<u8>),
-}
-
-// TODO: make this nicer
-impl fmt::Debug for FileKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            FileKind::Zeroed => "Zeroed",
-            FileKind::Oned => "Oned",
-            FileKind::Random(_) => "Random",
-            FileKind::Custom(_) => "Custom",
-        })
-    }
 }
 
 impl Default for FileKind {
@@ -244,7 +232,7 @@ impl Default for FileKind {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 struct FileProp {
     size: Option<usize>,
 }
@@ -273,12 +261,14 @@ impl File {
         Self::new(FileKind::Random(Some(seed)))
     }
 
-    pub fn custom(contents: Vec<u8>) -> Self {
+    pub fn custom(contents: impl Into<Vec<u8>>) -> Self {
+        let contents = contents.into();
         let contents_len = contents.len();
-        Self::new(FileKind::Custom(contents)).size(contents_len)
+        Self::new(FileKind::Custom(contents.to_owned())).size(contents_len)
     }
 
-    pub fn name(mut self, name: String) -> Self {
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        let name = name.into();
         self.common_prop.name = Some(name);
         self
     }
