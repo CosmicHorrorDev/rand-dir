@@ -1,21 +1,29 @@
+use std::io;
+
 use rand_dir::{Dir, Entry, File, FileSize, RandDir};
 
 pub fn main() {
-    let kibibyte_zeroed_file = Entry::File(File::zeroed().size(FileSize::Fixed(1_024)));
+    let kibibyte = FileSize::Fixed(1_024);
 
     let rand_dir = RandDir::builder()
         .entry(Entry::Dir(
             Dir::real()
-                .entry(kibibyte_zeroed_file.clone())
-                .entry(kibibyte_zeroed_file.clone()),
+                .entry(Entry::File(File::zeroed().size(kibibyte.clone())))
+                .entry(Entry::File(File::oned().size(kibibyte.clone()))),
         ))
         .entry(Entry::Dir(
-            Dir::symlink().entry(kibibyte_zeroed_file.clone()),
+            Dir::symlink().entry(Entry::File(File::random().size(kibibyte.clone()))),
         ))
-        .entry(kibibyte_zeroed_file)
-        .try_build();
+        .entry(Entry::File(File::custom(b"Hello, World!".to_vec())))
+        .try_build()
+        .unwrap();
 
-    std::thread::sleep_ms(30_000);
+    println!(
+        "You can look at the generated directory in: {:?}",
+        rand_dir.at()
+    );
 
-    println!("{:#?}", rand_dir);
+    println!("Press <ENTER> to delete the generated directory...");
+    let mut buffer = String::new();
+    io::stdin().read_line(&mut buffer).unwrap();
 }

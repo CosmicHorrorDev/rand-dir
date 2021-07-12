@@ -10,6 +10,7 @@ use std::{
 
 use once_cell::sync::Lazy;
 use petname::petname;
+use rand::{distributions::Uniform, random, thread_rng, Rng};
 use tempdir::TempDir;
 
 // Since the symlinks and broken symlinks all point to entries stored in the same directory so to
@@ -279,9 +280,9 @@ impl File {
         Self::new(FileKind::Random(Some(seed)))
     }
 
-    // TODO: shortcut to setting the iter and size
     pub fn custom(contents: Vec<u8>) -> Self {
-        todo!()
+        let contents_len = contents.len();
+        Self::new(FileKind::Custom(contents)).size(FileSize::Fixed(contents_len))
     }
 
     pub fn name(mut self, name: String) -> Self {
@@ -331,7 +332,12 @@ impl File {
             FileKind::Zeroed => Box::new(std::iter::repeat(0x00)),
             FileKind::Oned => Box::new(std::iter::repeat(0xFF)),
             // TODO: look into rand::sample_iter
-            FileKind::Random(maybe_seed) => todo!(),
+            FileKind::Random(maybe_seed) => {
+                let seed = maybe_seed.unwrap_or_else(|| random());
+                // TODO: use a seedable rng here so that we can actually seed this
+                // TODO: look into accepting a mutable rng for generating the seed?
+                Box::new(thread_rng().sample_iter(rand::distributions::Standard))
+            }
             FileKind::Custom(custom_contents) => Box::new(custom_contents.into_iter()),
         };
         let contents: Vec<_> = contents_iter.take(contents_len).collect();
