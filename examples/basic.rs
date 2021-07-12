@@ -1,20 +1,18 @@
-use std::io;
+use rand_dir::{Dir, File, RandDir};
 
-use rand_dir::{Dir, Entry, File, RandDir};
-
-pub fn main() {
-    let kibibyte = 1_024;
-
+fn main() {
+    #[rustfmt::skip]
     let rand_dir = RandDir::builder()
-        .entry(Entry::Dir(
+        .dir(
             Dir::real()
-                .entry(Entry::File(File::zeroed().size(kibibyte)))
-                .entry(Entry::File(File::oned().size(kibibyte))),
-        ))
-        .entry(Entry::Dir(
-            Dir::symlink().entry(Entry::File(File::random().size(kibibyte))),
-        ))
-        .entry(Entry::File(File::custom(*b"Hello, World!")))
+                .file(File::zeroed())
+                .file(File::oned())
+        )
+        .dir(
+            Dir::symlink()
+                .file(File::random())
+        )
+        .file(File::custom(*b"Hello, World!"))
         .try_build()
         .unwrap();
 
@@ -25,5 +23,5 @@ pub fn main() {
 
     println!("Press <ENTER> to delete the generated directory...");
     let mut buffer = String::new();
-    io::stdin().read_line(&mut buffer).unwrap();
+    std::io::stdin().read_line(&mut buffer).unwrap();
 }

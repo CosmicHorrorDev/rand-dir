@@ -44,7 +44,20 @@ impl RandDirBuilder {
         Self::default()
     }
 
-    pub fn entry(mut self, entry: Entry) -> Self {
+    // TODO: can portions of this be deduped by calling out to `Dir` stuff?
+    pub fn dir(self, dir: Dir) -> Self {
+        self.entry(Entry::Dir(dir))
+    }
+
+    pub fn file(self, file: File) -> Self {
+        self.entry(Entry::File(file))
+    }
+
+    pub fn broken_symlink(self, broken_symlink: BrokenSymlink) -> Self {
+        self.entry(Entry::BrokenSymlink(broken_symlink))
+    }
+
+    fn entry(mut self, entry: Entry) -> Self {
         self.entries.push(entry);
         self
     }
@@ -94,7 +107,7 @@ struct CommonProp {
 // TODO: could store common stuff in here instead of having it duplicated in all the entries. This
 // does make the api a bit weirder unless we do delegate methods or something like that though
 #[derive(Debug, Clone)]
-pub enum Entry {
+enum Entry {
     Dir(Dir),
     File(File),
     BrokenSymlink(BrokenSymlink),
@@ -160,7 +173,19 @@ impl Dir {
         self
     }
 
-    pub fn entry(mut self, entry: Entry) -> Self {
+    pub fn dir(self, dir: Dir) -> Self {
+        self.entry(Entry::Dir(dir))
+    }
+
+    pub fn file(self, file: File) -> Self {
+        self.entry(Entry::File(file))
+    }
+
+    pub fn broken_symlink(self, broken_symlink: BrokenSymlink) -> Self {
+        self.entry(Entry::BrokenSymlink(broken_symlink))
+    }
+
+    fn entry(mut self, entry: Entry) -> Self {
         self.prop.entries.push(entry);
         self
     }
@@ -290,8 +315,8 @@ impl File {
             prop: FileProp { size: maybe_size },
         } = self;
 
-        // Figure out the content size
-        let size = maybe_size.unwrap_or_else(|| todo!());
+        // Defaults the size to 4 KiB
+        let size = maybe_size.unwrap_or(4_096);
 
         // Create the file and write the contents
         let file_name = name.unwrap_or_else(|| {
