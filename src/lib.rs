@@ -1,24 +1,40 @@
-use std::{fs, io, path::Path};
+// TODO: use globally increasing counters for symlinks and broken symlinks
 
+use std::{
+    fmt, fs,
+    io::{self, Write},
+    os::unix::prelude::FileExt,
+    path::{Path, PathBuf},
+};
+
+use petname::petname;
 use tempdir::TempDir;
 
 // TODO: setup properties that all entries would inherit from
-pub struct Root {
-    at: TempDir,
+#[derive(Debug)]
+pub struct RandDir {
+    root: TempDir,
+    base: PathBuf,
 }
 
-impl Root {
-    pub fn builder() -> RootBuilder {
-        RootBuilder::default()
+impl RandDir {
+    pub fn builder() -> RandDirBuilder {
+        RandDirBuilder::default()
+    }
+
+    pub fn at(&self) -> &Path {
+        &self.base
     }
 }
 
-#[derive(Default)]
-pub struct RootBuilder {
+// TODO: store an Rng here to propogate down to entries
+#[derive(Default, Debug)]
+pub struct RandDirBuilder {
     entries: Vec<Entry>,
 }
 
-impl RootBuilder {
+// TODO: allow for user to specify the prefix
+impl RandDirBuilder {
     pub fn new() -> Self {
         Self::default()
     }
@@ -28,24 +44,47 @@ impl RootBuilder {
         self
     }
 
-    pub fn try_build(self) -> Result<Root, io::Error> {
-        // TODO: allow for user specified prefix
-        let temp_dir = TempDir::new("rand-dir")?;
-        let root_path = temp_dir.path();
+    // TODO: have some sort of filetree description object used for comparisons, or see if a there
+    // is a good diff library that already covers that
+    // The RandDir is laid out so there is:
+    // <temp-dir> aka root
+    // |- base (the specified contents)
+    // |- symlinks (contains the directories pointed to by symlinks)
+    // \- broken-symlinks (contains the non-existent destinations of broken symlinks)
+    pub fn try_build(self) -> io::Result<RandDir> {
+        // TODO: nest this one layer deeper so that we can guarantee places for the broken symlinks
+        // to go
+        // Create the general layout
+        let temp_dir = TempDir::new("rand-dir-")?;
+        let root = temp_dir.path();
+
+        let base = root.join("base");
+        let symlinks = root.join("symlinks");
+        let broken_symlinks = root.join("broken-symlinks");
+        fs::create_dir(&base)?;
+        fs::create_dir(&symlinks)?;
+        fs::create_dir(&broken_symlinks)?;
+
+        // Generate all the entries
+        // TODO: pass down properties for the entries to inherit from
         for entry in self.entries {
-            entry.try_build_at(root_path)?;
+            entry.try_build_at(&base, &symlinks, &broken_symlinks)?;
         }
 
-        Ok(Root { at: temp_dir })
+        Ok(RandDir {
+            root: temp_dir,
+            base,
+        })
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 struct CommonProp {
     name: Option<String>,
     permissions: Option<fs::Permissions>,
 }
 
+#[derive(Debug, Clone)]
 pub enum Entry {
     Dir(Dir),
     File(File),
@@ -53,22 +92,23 @@ pub enum Entry {
 }
 
 impl Entry {
-    fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
+    fn try_build_at(self, at: &Path, symlinks: &Path, broken_symlinks: &Path) -> io::Result<()> {
         match self {
-            Entry::Dir(entry) => entry.try_build_at(at),
+            Entry::Dir(entry) => entry.try_build_at(at, symlinks, broken_symlinks),
             Entry::File(entry) => entry.try_build_at(at),
-            Entry::BrokenSymlink(entry) => entry.try_build_at(at),
+            Entry::BrokenSymlink(entry) => entry.try_build_at(at, symlinks, broken_symlinks),
         }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct Dir {
     kind: DirKind,
     common_prop: CommonProp,
     prop: DirProp,
 }
 
+#[derive(Debug, Clone)]
 enum DirKind {
     Normal,
     Symlink,
@@ -80,7 +120,7 @@ impl Default for DirKind {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 struct DirProp {
     entries: Vec<Entry>,
 }
@@ -116,23 +156,75 @@ impl Dir {
         self
     }
 
-    fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
-        todo!()
+    // TODO: actually set permissions if provided
+    fn try_build_at(self, at: &Path, symlinks: &Path, broken_symlinks: &Path) -> io::Result<()> {
+        let Self {
+            common_prop: CommonProp { name, .. },
+            kind,
+            prop: DirProp { entries },
+        } = self;
+
+        // TODO: handle the case of a duplicate name
+        let dir_name = name.unwrap_or_else(|| {
+            let prefix = match kind {
+                DirKind::Normal => "dir-",
+                DirKind::Symlink => "symlink-",
+            };
+
+            format!("{}{}", prefix, petname(3, "-"))
+        });
+
+        // A regular directory will just have it's contents made in `at` while a symlink will have
+        // it's contents in a destination directory in `symlinks`
+        let dir_loc = match kind {
+            DirKind::Normal => at,
+            DirKind::Symlink => symlinks,
+        }
+        .join(&dir_name);
+        fs::create_dir(&dir_loc)?;
+
+        // Build all the entries
+        for entry in entries {
+            entry.try_build_at(&dir_loc, symlinks, broken_symlinks)?;
+        }
+
+        // TODO: have this support windows too
+        // Now actually link the symlink
+        if let DirKind::Symlink = kind {
+            let original = dir_loc;
+            let link = at.join(&dir_name);
+            std::os::unix::fs::symlink(original, link)?;
+        }
+
+        Ok(())
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct File {
     kind: FileKind,
     common_prop: CommonProp,
     prop: FileProp,
 }
 
+#[derive(Clone)]
 enum FileKind {
     Zeroed,
     Oned,
     Random(Option<u64>),
-    Custom(Box<dyn Iterator<Item = u8>>),
+    Custom(Vec<u8>),
+}
+
+// TODO: make this nicer
+impl fmt::Debug for FileKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            FileKind::Zeroed => "Zeroed",
+            FileKind::Oned => "Oned",
+            FileKind::Random(_) => "Random",
+            FileKind::Custom(_) => "Custom",
+        })
+    }
 }
 
 impl Default for FileKind {
@@ -141,12 +233,13 @@ impl Default for FileKind {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum FileSize {
-    Fixed(u64),
-    Uniform(u64, u64),
+    Fixed(usize),
+    Uniform(usize, usize),
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 struct FileProp {
     size: Option<FileSize>,
 }
@@ -175,8 +268,9 @@ impl File {
         Self::new(FileKind::Random(Some(seed)))
     }
 
-    pub fn custom(contents_iter: Box<dyn Iterator<Item = u8>>) -> Self {
-        Self::new(FileKind::Custom(contents_iter))
+    // TODO: shortcut to setting the iter and size
+    pub fn custom(contents: Vec<u8>) -> Self {
+        todo!()
     }
 
     pub fn name(mut self, name: String) -> Self {
@@ -194,12 +288,46 @@ impl File {
         self
     }
 
-    fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
-        todo!()
+    fn try_build_at(self, at: &Path) -> io::Result<()> {
+        let Self {
+            kind,
+            common_prop: CommonProp { name, .. },
+            prop: FileProp { size: maybe_size },
+        } = self;
+
+        // Figure out the content size
+        let size = maybe_size.unwrap_or_else(|| todo!());
+        let contents_len = match size {
+            FileSize::Fixed(len) => len,
+            FileSize::Uniform(lower, upper) => todo!(),
+        };
+
+        // TODO: this can be more efficient, just need to find a good way to handle streaming data
+        // from the iterator to the file
+        // Get the contents
+        let contents_iter: Box<dyn Iterator<Item = u8>> = match kind {
+            FileKind::Zeroed => Box::new(std::iter::repeat(0x00)),
+            FileKind::Oned => Box::new(std::iter::repeat(0xFF)),
+            // TODO: look into rand::sample_iter
+            FileKind::Random(maybe_seed) => todo!(),
+            FileKind::Custom(custom_contents) => Box::new(custom_contents.into_iter()),
+        };
+        let contents: Vec<_> = contents_iter.take(contents_len).collect();
+
+        // Create the file and write the contents
+        let file_name = name.unwrap_or_else(|| {
+            let prefix = "file-";
+            format!("{}{}", prefix, petname(3, "-"))
+        });
+        let file_loc = at.join(file_name);
+        let mut file = fs::File::create(file_loc)?;
+        file.write_all(&contents)?;
+
+        Ok(())
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct BrokenSymlink {
     common_prop: CommonProp,
 }
@@ -219,17 +347,7 @@ impl BrokenSymlink {
         self
     }
 
-    pub fn try_build_at(self, at: &Path) -> Result<(), io::Error> {
+    fn try_build_at(self, at: &Path, symlinks: &Path, broken_symlinks: &Path) -> io::Result<()> {
         todo!()
     }
-}
-
-fn goals() {
-    let rand_dir = Root::builder()
-        .entry(Entry::Dir(
-            Dir::new()
-                .entry(Entry::File(File::default()))
-                .entry(Entry::File(File::default())),
-        ))
-        .entry(Entry::File(File::default()));
 }
