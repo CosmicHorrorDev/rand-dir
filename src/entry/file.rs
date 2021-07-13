@@ -4,9 +4,8 @@ use std::{
     path::Path,
 };
 
-use crate::entry::CommonProp;
+use crate::{entry::CommonProp, utils::gen_petname};
 
-use petname::petname;
 use rand::{random, thread_rng, Rng};
 
 #[derive(Default, Debug, Clone)]
@@ -99,7 +98,7 @@ impl File {
                 FileKind::Random(_) => ".random",
                 FileKind::Custom(_) => ".custom",
             };
-            format!("{}{}{}", prefix, petname(2, "-"), suffix)
+            format!("{}{}{}", prefix, gen_petname(), suffix)
         });
 
         // TODO: this can be more efficient, just need to find a good way to handle streaming data

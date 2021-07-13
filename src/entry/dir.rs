@@ -4,10 +4,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::entry::{BrokenSymlink, CommonProp, Entry, File};
+use crate::{
+    entry::{BrokenSymlink, CommonProp, Entry, File},
+    utils::gen_petname,
+};
 
 use once_cell::sync::Lazy;
-use petname::petname;
 
 // Since the symlinks and broken symlinks all point to entries stored in the same directory so to
 // prevent naming conflicts the entries are made unique with a globally incremented counter
@@ -95,7 +97,7 @@ impl Dir {
 
         // TODO: handle the case of a duplicate name
         let dir_name = name.unwrap_or_else(|| match kind {
-            DirKind::Normal => format!("dir-{}", petname(2, "-")),
+            DirKind::Normal => format!("dir-{}", gen_petname()),
             DirKind::Symlink => {
                 let mut symlink_counter = GLOBAL_SYMLINK_COUNTER.lock().unwrap();
                 let current_val = *symlink_counter;
@@ -123,7 +125,7 @@ impl Dir {
         // Now actually create the symlink
         if let DirKind::Symlink = kind {
             let original = dir_loc;
-            let link = at.join(&format!("symlink-{}", petname(2, "-")));
+            let link = at.join(&format!("symlink-{}", gen_petname()));
             std::os::unix::fs::symlink(original, link)?;
         }
 
