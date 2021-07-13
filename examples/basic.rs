@@ -1,6 +1,6 @@
 use rand_dir::{Dir, File, RandDir};
 
-fn main() {
+fn main() -> std::io::Result<()> {
     #[rustfmt::skip]
     let rand_dir = RandDir::builder()
         .dir(
@@ -13,15 +13,11 @@ fn main() {
                 .file(File::random())
         )
         .file(File::custom(*b"Hello, World!"))
-        .try_build()
-        .unwrap();
+        .try_build()?;
 
-    println!(
-        "You can look at the generated directory in: {:?}",
-        rand_dir.at()
-    );
+    println!("Take a look at the directory: {:?}", rand_dir.at());
+    println!("Press <ENTER> to delete the directory...");
+    std::io::stdin().read_line(&mut String::new())?;
 
-    println!("Press <ENTER> to delete the generated directory...");
-    let mut buffer = String::new();
-    std::io::stdin().read_line(&mut buffer).unwrap();
+    Ok(())
 }
