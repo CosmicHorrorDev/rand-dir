@@ -1,15 +1,19 @@
 # _rand-dir_
 
-A featureful library for easily constructing complex directory sturctures for
-test purposes where the specific names and file contents typically aren't
-important
+Easily construct complex directory structures
+
+This is primarily focused towards property testing where the exact contents of
+different files or entry's names may not matter since you are only concerned
+about your program upholding certain properties like a directory being
+identical when compressed and then decompressed or that it traverses symlinks
+properly
 
 ## Quickstart
 
 ```rust
-{
-    use rand_dir::{Dir, File, RandDir};
+use rand_dir::{Dir, File, RandDir};
 
+fn main -> Result<(), Box<dyn std::error::Error>> {
     let rand_dir = RandDir::builder()
         .dir(
             Dir::real()
@@ -24,7 +28,9 @@ important
         .try_build()?;
 
     println!("Base of directory at {:?}", rand_dir.at());
-} // <-- Directory cleaned up when it goes out of scope
+
+    Ok(())
+} // <-- Directory is cleaned up when it goes out of scope
 ```
 
 Will create a temporary directory like below where the `base` directory can be
@@ -47,3 +53,18 @@ accessed with `rand_dir.at()`
 
 and if needed the names, permissions, and filesizes can all be customized by
 calling the relevant methods on each entry
+
+## License
+
+Licensed under either of
+
+ - Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+ - MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall
+be dual licensed as above, without any additional terms or conditions.
