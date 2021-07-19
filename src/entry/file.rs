@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{self, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use crate::{entry::CommonProp, utils::gen_petname};
@@ -64,7 +64,7 @@ impl File {
         Self::new(FileKind::Custom(contents.to_owned())).size(contents_len)
     }
 
-    pub fn name(mut self, name: impl Into<String>) -> Self {
+    pub fn name(mut self, name: impl Into<PathBuf>) -> Self {
         self.common_prop.set_name(name);
         self
     }
@@ -98,7 +98,7 @@ impl File {
                 FileKind::Random(_) => ".random",
                 FileKind::Custom(_) => ".custom",
             };
-            format!("{}{}{}", prefix, gen_petname(), suffix)
+            format!("{}{}{}", prefix, gen_petname(), suffix).into()
         });
 
         // TODO: this can be more efficient, just need to find a good way to handle streaming data

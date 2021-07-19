@@ -13,7 +13,7 @@ properly
 ```rust
 use rand_dir::{Dir, File, RandDir};
 
-fn main -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rand_dir = RandDir::builder()
         .dir(
             Dir::real()
@@ -30,7 +30,7 @@ fn main -> Result<(), Box<dyn std::error::Error>> {
     println!("Base of directory at {:?}", rand_dir.at());
 
     Ok(())
-} // <-- Directory is cleaned up when it goes out of scope
+}  // <-- Directory is cleaned up when it goes out of scope
 ```
 
 Will create a temporary directory like below where the `base` directory can be

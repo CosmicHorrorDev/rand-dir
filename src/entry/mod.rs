@@ -4,16 +4,19 @@ mod file;
 
 pub use self::{broken_symlink::BrokenSymlink, dir::Dir, file::File};
 
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 #[derive(Default, Debug, Clone)]
 struct CommonProp {
-    name: Option<String>,
+    name: Option<PathBuf>,
     permissions: Option<fs::Permissions>,
 }
 
 impl CommonProp {
-    fn set_name(&mut self, name: impl Into<String>) {
+    fn set_name(&mut self, name: impl Into<PathBuf>) {
         self.name = Some(name.into());
     }
 

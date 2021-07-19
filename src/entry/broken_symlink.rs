@@ -1,4 +1,7 @@
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use crate::entry::CommonProp;
 
@@ -12,7 +15,7 @@ impl BrokenSymlink {
         Self::default()
     }
 
-    pub fn name(mut self, name: impl Into<String>) -> Self {
+    pub fn name(mut self, name: impl Into<PathBuf>) -> Self {
         self.common_prop.set_name(name);
         self
     }

@@ -1,6 +1,6 @@
 use std::{
     fs, io,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -55,7 +55,7 @@ impl Dir {
         Self::new(DirKind::Symlink)
     }
 
-    pub fn name(mut self, name: impl Into<String>) -> Self {
+    pub fn name(mut self, name: impl Into<PathBuf>) -> Self {
         self.common_prop.set_name(name);
         self
     }
@@ -96,15 +96,18 @@ impl Dir {
         } = self;
 
         // TODO: handle the case of a duplicate name
-        let dir_name = name.unwrap_or_else(|| match kind {
-            DirKind::Normal => format!("dir-{}", gen_petname()),
-            DirKind::Symlink => {
-                let mut symlink_counter = GLOBAL_SYMLINK_COUNTER.lock().unwrap();
-                let current_val = *symlink_counter;
-                *symlink_counter += 1;
+        let dir_name = name.unwrap_or_else(|| {
+            match kind {
+                DirKind::Normal => format!("dir-{}", gen_petname()),
+                DirKind::Symlink => {
+                    let mut symlink_counter = GLOBAL_SYMLINK_COUNTER.lock().unwrap();
+                    let current_val = *symlink_counter;
+                    *symlink_counter += 1;
 
-                format!("symlink-dest-{}", current_val)
+                    format!("symlink-dest-{}", current_val)
+                }
             }
+            .into()
         });
 
         // A regular directory will just have it's contents made in `at` while a symlink will have
