@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs, io,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -18,7 +19,7 @@ static GLOBAL_SYMLINK_COUNTER: Lazy<Arc<Mutex<usize>>> = Lazy::new(|| Arc::new(M
 #[derive(Default, Debug, Clone)]
 pub struct Dir {
     kind: DirKind,
-    common_prop: CommonProp,
+    pub(crate) common_prop: CommonProp,
     prop: DirProp,
 }
 
@@ -36,7 +37,7 @@ impl Default for DirKind {
 
 #[derive(Default, Debug, Clone)]
 struct DirProp {
-    entries: Vec<Entry>,
+    entries: BTreeSet<Entry>,
 }
 
 impl Dir {
@@ -78,7 +79,7 @@ impl Dir {
     }
 
     fn entry(mut self, entry: Entry) -> Self {
-        self.prop.entries.push(entry);
+        self.prop.entries.insert(entry);
         self
     }
 

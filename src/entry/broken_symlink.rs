@@ -7,7 +7,7 @@ use crate::entry::CommonProp;
 
 #[derive(Default, Debug, Clone)]
 pub struct BrokenSymlink {
-    common_prop: CommonProp,
+    pub(crate) common_prop: CommonProp,
 }
 
 impl BrokenSymlink {

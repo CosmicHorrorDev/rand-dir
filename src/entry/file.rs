@@ -11,7 +11,7 @@ use rand::{random, thread_rng, Rng};
 #[derive(Default, Debug, Clone)]
 pub struct File {
     kind: FileKind,
-    common_prop: CommonProp,
+    pub(crate) common_prop: CommonProp,
     prop: FileProp,
 }
 
