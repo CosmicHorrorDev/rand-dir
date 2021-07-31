@@ -104,19 +104,18 @@ impl PartialOrd for Entry {
     }
 }
 
+fn extract_entrys_name(entry: &Entry) -> &EntryName {
+    let common_prop = match entry {
+        Entry::Dir(inner) => &inner.common_prop,
+        Entry::File(inner) => &inner.common_prop,
+        Entry::BrokenSymlink(inner) => &inner.common_prop,
+    };
+
+    &common_prop.name
+}
+
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> Ordering {
-        let extract_name = |entry: &Self| {
-            let common_prop: &CommonProp = match entry {
-                Self::Dir(inner) => &inner.common_prop,
-                Self::File(inner) => &inner.common_prop,
-                Self::BrokenSymlink(inner) => &inner.common_prop,
-            };
-
-            // TODO: get rid of this clone by just holding a reference
-            common_prop.name.clone()
-        };
-
-        extract_name(self).cmp(&extract_name(other))
+        extract_entrys_name(self).cmp(&extract_entrys_name(other))
     }
 }
