@@ -1,7 +1,8 @@
 use std::{
+    ffi::OsString,
     fs,
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use crate::{entry::CommonProp, utils::gen_petname};
@@ -64,7 +65,7 @@ impl File {
         Self::new(FileKind::Custom(contents.to_owned())).size(contents_len)
     }
 
-    pub fn name(mut self, name: impl Into<PathBuf>) -> Self {
+    pub fn name(mut self, name: impl Into<OsString>) -> Self {
         self.common_prop.set_name(name);
         self
     }

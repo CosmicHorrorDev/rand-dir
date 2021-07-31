@@ -1,3 +1,6 @@
+/// Handles abstractions over filesystem entries
+///
+/// This whole module intends to contain as much internal complexity as possible from the user.
 mod broken_symlink;
 mod dir;
 mod file;
@@ -5,15 +8,16 @@ mod file;
 use once_cell::sync::Lazy;
 
 pub use self::{broken_symlink::BrokenSymlink, dir::Dir, file::File};
+use crate::utils::next_global_counter;
 
 use std::{
     cmp::Ordering,
+    ffi::OsString,
     fs, io,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{Arc, Mutex},
 };
 
-// TODO: maybe abstract out this counter pattern
 static GLOBAL_ENTRY_UNIQIFIER: Lazy<Arc<Mutex<u64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
 
 /// This type is very similar to a plain `Option<PathBuf>` __except__ that the `None` variant holds
@@ -21,17 +25,14 @@ static GLOBAL_ENTRY_UNIQIFIER: Lazy<Arc<Mutex<u64>>> = Lazy::new(|| Arc::new(Mut
 /// required since a directories contents are represented with a `Set`
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum EntryName {
-    Set(PathBuf),
+    Set(OsString),
     Generated(u64),
 }
 
 impl EntryName {
-    fn unwrap_or_else<F>(self, f: F) -> PathBuf
-    where
-        F: FnOnce() -> PathBuf,
-    {
+    fn unwrap_or_else(self, f: impl FnOnce() -> OsString) -> OsString {
         match self {
-            Self::Set(path) => path,
+            Self::Set(s) => s,
             Self::Generated(_) => f(),
         }
     }
@@ -39,10 +40,7 @@ impl EntryName {
 
 impl Default for EntryName {
     fn default() -> Self {
-        let mut entry_uniqifier = GLOBAL_ENTRY_UNIQIFIER.lock().unwrap();
-        let current_val = *entry_uniqifier;
-        *entry_uniqifier += 1;
-
+        let current_val = next_global_counter(&GLOBAL_ENTRY_UNIQIFIER);
         Self::Generated(current_val)
     }
 }
@@ -54,7 +52,7 @@ pub(crate) struct CommonProp {
 }
 
 impl CommonProp {
-    fn set_name(&mut self, name: impl Into<PathBuf>) {
+    fn set_name(&mut self, name: impl Into<OsString>) {
         self.name = EntryName::Set(name.into());
     }
 

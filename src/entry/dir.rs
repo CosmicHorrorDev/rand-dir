@@ -1,20 +1,21 @@
 use std::{
     collections::BTreeSet,
+    ffi::OsString,
     fs, io,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{Arc, Mutex},
 };
 
 use crate::{
     entry::{BrokenSymlink, CommonProp, Entry, File},
-    utils::gen_petname,
+    utils::{gen_petname, next_global_counter},
 };
 
 use once_cell::sync::Lazy;
 
 // Since the symlinks and broken symlinks all point to entries stored in the same directory so to
 // prevent naming conflicts the entries are made unique with a globally incremented counter
-static GLOBAL_SYMLINK_COUNTER: Lazy<Arc<Mutex<usize>>> = Lazy::new(|| Arc::new(Mutex::new(1)));
+static GLOBAL_SYMLINK_COUNTER: Lazy<Arc<Mutex<u64>>> = Lazy::new(|| Arc::new(Mutex::new(1)));
 
 #[derive(Default, Debug, Clone)]
 pub struct Dir {
@@ -56,7 +57,7 @@ impl Dir {
         Self::new(DirKind::Symlink)
     }
 
-    pub fn name(mut self, name: impl Into<PathBuf>) -> Self {
+    pub fn name(mut self, name: impl Into<OsString>) -> Self {
         self.common_prop.set_name(name);
         self
     }
@@ -101,10 +102,7 @@ impl Dir {
             match kind {
                 DirKind::Normal => format!("dir-{}", gen_petname()),
                 DirKind::Symlink => {
-                    let mut symlink_counter = GLOBAL_SYMLINK_COUNTER.lock().unwrap();
-                    let current_val = *symlink_counter;
-                    *symlink_counter += 1;
-
+                    let current_val = next_global_counter(&GLOBAL_SYMLINK_COUNTER);
                     format!("symlink-dest-{}", current_val)
                 }
             }
