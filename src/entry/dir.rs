@@ -114,7 +114,7 @@ impl Dir {
     }
 
     // TODO: actually set permissions if provided
-    pub(super) fn try_build_at(
+    pub(crate) fn try_build_at(
         self,
         at: &Path,
         symlinks: &Path,

@@ -23,9 +23,17 @@ impl RandDir {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct RandDirBuilder {
-    entries: Vec<Entry>,
+    inner: Dir,
+}
+
+impl Default for RandDirBuilder {
+    fn default() -> Self {
+        Self {
+            inner: Dir::real().name("base"),
+        }
+    }
 }
 
 // TODO: allow for user to specify the prefix
@@ -34,21 +42,18 @@ impl RandDirBuilder {
         Self::default()
     }
 
-    // TODO: can portions of this be deduped by calling out to `Dir` stuff?
-    pub fn dir(self, dir: Dir) -> Self {
-        self.entry(Entry::Dir(dir))
+    pub fn dir(mut self, dir: Dir) -> Self {
+        self.inner = self.inner.dir(dir);
+        self
     }
 
-    pub fn file(self, file: File) -> Self {
-        self.entry(Entry::File(file))
+    pub fn file(mut self, file: File) -> Self {
+        self.inner = self.inner.file(file);
+        self
     }
 
-    pub fn broken_symlink(self, broken_symlink: BrokenSymlink) -> Self {
-        self.entry(Entry::BrokenSymlink(broken_symlink))
-    }
-
-    fn entry(mut self, entry: Entry) -> Self {
-        self.entries.push(entry);
+    pub fn broken_symlink(mut self, broken_symlink: BrokenSymlink) -> Self {
+        self.inner = self.inner.broken_symlink(broken_symlink);
         self
     }
 
@@ -66,18 +71,15 @@ impl RandDirBuilder {
         let temp_dir = TempDir::new("rand-dir-")?;
         let root = temp_dir.path();
 
-        let base = root.join("base");
         let symlinks = root.join("symlinks");
         let broken_symlinks = root.join("broken-symlinks");
-        fs::create_dir(&base)?;
         fs::create_dir(&symlinks)?;
         fs::create_dir(&broken_symlinks)?;
 
         // Generate all the entries
         // TODO: pass down properties for the entries to inherit from
-        for entry in self.entries {
-            entry.try_build_at(&base, &symlinks, &broken_symlinks)?;
-        }
+        let base = root.join("base");
+        self.inner.try_build_at(root, &symlinks, &broken_symlinks)?;
 
         Ok(RandDir {
             root: temp_dir,
