@@ -132,17 +132,18 @@ impl Dir {
                 Err(io::Error::new(io::ErrorKind::Other, error_msg.as_str()))
             }
             Entries::Valid(entry_list) => {
-                // TODO: handle the case of a duplicate name
-                let dir_name = name.unwrap_or_else(|| {
-                    match kind {
-                        DirKind::Normal => format!("dir-{}", gen_petname()),
-                        DirKind::Symlink => {
-                            let current_val = next_global_counter(&GLOBAL_SYMLINK_COUNTER);
-                            format!("symlink-dest-{}", current_val)
-                        }
+                // Having the name set will set the name of the `Real` dir, or the name of the
+                // symlink (not destination) if it's a `Symlink`
+                let dir_name = match kind {
+                    DirKind::Normal => name
+                        .clone()
+                        // TODO: handle the case of a duplicate name
+                        .unwrap_or_else(|| format!("dir-{}", gen_petname()).into()),
+                    DirKind::Symlink => {
+                        let current_val = next_global_counter(&GLOBAL_SYMLINK_COUNTER);
+                        format!("symlink-dest-{}", current_val).into()
                     }
-                    .into()
-                });
+                };
 
                 // A regular directory will just have it's contents made in `at` while a symlink will have
                 // it's contents in a destination directory in `symlinks`
@@ -162,7 +163,8 @@ impl Dir {
                 // Now actually create the symlink
                 if let DirKind::Symlink = kind {
                     let original = dir_loc;
-                    let link = at.join(&format!("symlink-{}", gen_petname()));
+                    let link = at
+                        .join(&name.unwrap_or_else(|| format!("symlink-{}", gen_petname()).into()));
                     std::os::unix::fs::symlink(original, link)?;
                 }
 
