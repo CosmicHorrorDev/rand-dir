@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    entry::{BrokenSymlink, CommonProp, Entry, File},
+    entry::{BrokenSymlink, CommonProp, Entry, EntryName, File},
     utils::{gen_petname, next_global_counter},
 };
 
@@ -38,7 +38,35 @@ impl Default for DirKind {
 
 #[derive(Default, Debug, Clone)]
 struct DirProp {
-    entries: BTreeSet<Entry>,
+    entries: Entries,
+}
+
+#[derive(Debug, Clone)]
+enum Entries {
+    Valid(BTreeSet<Entry>),
+    HasDuplicate(OsString),
+}
+
+impl Entries {
+    fn insert(&mut self, entry: Entry) {
+        if let Self::Valid(listing) = self {
+            if listing.contains(&entry) {
+                if let EntryName::Set(name) = &entry.get_common_prop().name {
+                    *self = Self::HasDuplicate(name.to_owned());
+                } else {
+                    unreachable!("`Generated` names should always be unique");
+                }
+            } else {
+                listing.insert(entry);
+            }
+        }
+    }
+}
+
+impl Default for Entries {
+    fn default() -> Self {
+        Self::Valid(BTreeSet::default())
+    }
 }
 
 impl Dir {
@@ -79,6 +107,7 @@ impl Dir {
         self.entry(Entry::BrokenSymlink(broken_symlink))
     }
 
+    // Store an error if entries with duplicate names are added
     fn entry(mut self, entry: Entry) -> Self {
         self.prop.entries.insert(entry);
         self
@@ -97,40 +126,48 @@ impl Dir {
             prop: DirProp { entries },
         } = self;
 
-        // TODO: handle the case of a duplicate name
-        let dir_name = name.unwrap_or_else(|| {
-            match kind {
-                DirKind::Normal => format!("dir-{}", gen_petname()),
-                DirKind::Symlink => {
-                    let current_val = next_global_counter(&GLOBAL_SYMLINK_COUNTER);
-                    format!("symlink-dest-{}", current_val)
-                }
+        match entries {
+            Entries::HasDuplicate(name) => {
+                let error_msg = format!("Directory had duplicate entry named: {:?}", name);
+                Err(io::Error::new(io::ErrorKind::Other, error_msg.as_str()))
             }
-            .into()
-        });
+            Entries::Valid(entry_list) => {
+                // TODO: handle the case of a duplicate name
+                let dir_name = name.unwrap_or_else(|| {
+                    match kind {
+                        DirKind::Normal => format!("dir-{}", gen_petname()),
+                        DirKind::Symlink => {
+                            let current_val = next_global_counter(&GLOBAL_SYMLINK_COUNTER);
+                            format!("symlink-dest-{}", current_val)
+                        }
+                    }
+                    .into()
+                });
 
-        // A regular directory will just have it's contents made in `at` while a symlink will have
-        // it's contents in a destination directory in `symlinks`
-        let dir_loc = match kind {
-            DirKind::Normal => at,
-            DirKind::Symlink => symlinks,
+                // A regular directory will just have it's contents made in `at` while a symlink will have
+                // it's contents in a destination directory in `symlinks`
+                let dir_loc = match kind {
+                    DirKind::Normal => at,
+                    DirKind::Symlink => symlinks,
+                }
+                .join(&dir_name);
+                fs::create_dir(&dir_loc)?;
+
+                // Build all the entries
+                for entry in entry_list {
+                    entry.try_build_at(&dir_loc, symlinks, broken_symlinks)?;
+                }
+
+                // TODO: have this support windows too
+                // Now actually create the symlink
+                if let DirKind::Symlink = kind {
+                    let original = dir_loc;
+                    let link = at.join(&format!("symlink-{}", gen_petname()));
+                    std::os::unix::fs::symlink(original, link)?;
+                }
+
+                Ok(())
+            }
         }
-        .join(&dir_name);
-        fs::create_dir(&dir_loc)?;
-
-        // Build all the entries
-        for entry in entries {
-            entry.try_build_at(&dir_loc, symlinks, broken_symlinks)?;
-        }
-
-        // TODO: have this support windows too
-        // Now actually create the symlink
-        if let DirKind::Symlink = kind {
-            let original = dir_loc;
-            let link = at.join(&format!("symlink-{}", gen_petname()));
-            std::os::unix::fs::symlink(original, link)?;
-        }
-
-        Ok(())
     }
 }

@@ -2,5 +2,5 @@ mod entry;
 mod rand_dir;
 mod utils;
 
-pub use self::entry::{BrokenSymlink, Dir, File};
-pub use rand_dir::{RandDir, RandDirBuilder};
+pub use crate::entry::{BrokenSymlink, Dir, File};
+pub use crate::rand_dir::{RandDir, RandDirBuilder};

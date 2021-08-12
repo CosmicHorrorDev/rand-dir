@@ -18,13 +18,18 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// Global counter that's bumped for added entries.
+///
+/// This allows for keeping ordering and comparisons of different entries even when the names are
+/// being generated
 static GLOBAL_ENTRY_UNIQIFIER: Lazy<Arc<Mutex<u64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
 
+// FIXME: `Clone` here can mess up `Generated`. Cloning should bump up the counter
 /// This type is very similar to a plain `Option<PathBuf>` __except__ that the `None` variant holds
 /// a `u64` that is used to ensure uniqueness. This allows for implementing `Ord` or `Eq` which is
 /// required since a directories contents are represented with a `Set`
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum EntryName {
+pub(crate) enum EntryName {
     Set(OsString),
     Generated(u64),
 }
@@ -61,10 +66,6 @@ impl CommonProp {
     }
 }
 
-// TODO: can this be done with traits instead so that people aren't having to setup the enum
-// variants or are there some limitations that I'm not thinking of
-// TODO: could store common stuff in here instead of having it duplicated in all the entries. This
-// does make the api a bit weirder unless we do delegate methods or something like that though
 #[derive(Debug, Clone)]
 pub enum Entry {
     Dir(Dir),
@@ -83,6 +84,14 @@ impl Entry {
             Entry::Dir(entry) => entry.try_build_at(at, symlinks, broken_symlinks),
             Entry::File(entry) => entry.try_build_at(at),
             Entry::BrokenSymlink(entry) => entry.try_build_at(at, broken_symlinks),
+        }
+    }
+
+    fn get_common_prop(&self) -> &CommonProp {
+        match self {
+            Entry::Dir(inner) => &inner.common_prop,
+            Entry::File(inner) => &inner.common_prop,
+            Entry::BrokenSymlink(inner) => &inner.common_prop,
         }
     }
 }
@@ -104,18 +113,10 @@ impl PartialOrd for Entry {
     }
 }
 
-fn extract_entrys_name(entry: &Entry) -> &EntryName {
-    let common_prop = match entry {
-        Entry::Dir(inner) => &inner.common_prop,
-        Entry::File(inner) => &inner.common_prop,
-        Entry::BrokenSymlink(inner) => &inner.common_prop,
-    };
-
-    &common_prop.name
-}
-
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> Ordering {
-        extract_entrys_name(self).cmp(&extract_entrys_name(other))
+        self.get_common_prop()
+            .name
+            .cmp(&other.get_common_prop().name)
     }
 }
