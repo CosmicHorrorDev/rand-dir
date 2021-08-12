@@ -12,3 +12,6 @@ rand = "0.8.4"
 tempdir = "0.3.7"
 # TODO: move this behind a feature flag
 arbitrary = "1.0.1"
+
+[dev-dependencies]
+dir-diff = "0.3.2"
