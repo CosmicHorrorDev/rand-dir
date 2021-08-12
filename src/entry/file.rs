@@ -84,7 +84,7 @@ impl File {
     pub(super) fn try_build_at(self, at: &Path) -> io::Result<()> {
         let Self {
             kind,
-            common_prop: CommonProp { name, .. },
+            common_prop: CommonProp { name, permissions },
             prop: FileProp { size: maybe_size },
         } = self;
 

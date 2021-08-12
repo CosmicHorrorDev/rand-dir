@@ -131,7 +131,7 @@ impl Dir {
         broken_symlinks: &Path,
     ) -> io::Result<()> {
         let Self {
-            common_prop: CommonProp { name, .. },
+            common_prop: CommonProp { name, permissions },
             kind,
             prop: DirProp { entries },
         } = self;
