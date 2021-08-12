@@ -61,6 +61,16 @@ impl Entries {
             }
         }
     }
+
+    fn try_get_entries(self) -> io::Result<BTreeSet<Entry>> {
+        match self {
+            Self::Valid(entries) => Ok(entries),
+            Self::HasDuplicate(name) => {
+                let error_msg = format!("Directory had duplicate entry named: {:?}", name);
+                Err(io::Error::new(io::ErrorKind::Other, error_msg.as_str()))
+            }
+        }
+    }
 }
 
 impl Default for Entries {
@@ -126,50 +136,49 @@ impl Dir {
             prop: DirProp { entries },
         } = self;
 
-        match entries {
-            Entries::HasDuplicate(name) => {
-                let error_msg = format!("Directory had duplicate entry named: {:?}", name);
-                Err(io::Error::new(io::ErrorKind::Other, error_msg.as_str()))
+        let entry_list = entries.try_get_entries()?;
+
+        // Having the name set will set the name of the `Real` dir, or the name of the symlink (not
+        // destination) if it's a `Symlink`
+        let dir_name = match kind {
+            DirKind::Normal => name
+                .clone()
+                // TODO: handle the case of a duplicate name
+                .unwrap_or_else(|| format!("dir-{}", gen_petname()).into()),
+            DirKind::Symlink => {
+                let current_val = next_global_counter(&GLOBAL_SYMLINK_COUNTER);
+                format!("symlink-dest-{}", current_val).into()
             }
-            Entries::Valid(entry_list) => {
-                // Having the name set will set the name of the `Real` dir, or the name of the
-                // symlink (not destination) if it's a `Symlink`
-                let dir_name = match kind {
-                    DirKind::Normal => name
-                        .clone()
-                        // TODO: handle the case of a duplicate name
-                        .unwrap_or_else(|| format!("dir-{}", gen_petname()).into()),
-                    DirKind::Symlink => {
-                        let current_val = next_global_counter(&GLOBAL_SYMLINK_COUNTER);
-                        format!("symlink-dest-{}", current_val).into()
-                    }
-                };
+        };
 
-                // A regular directory will just have it's contents made in `at` while a symlink will have
-                // it's contents in a destination directory in `symlinks`
-                let dir_loc = match kind {
-                    DirKind::Normal => at,
-                    DirKind::Symlink => symlinks,
-                }
-                .join(&dir_name);
-                fs::create_dir(&dir_loc)?;
-
-                // Build all the entries
-                for entry in entry_list {
-                    entry.try_build_at(&dir_loc, symlinks, broken_symlinks)?;
-                }
-
-                // TODO: have this support windows too
-                // Now actually create the symlink
-                if let DirKind::Symlink = kind {
-                    let original = dir_loc;
-                    let link = at
-                        .join(&name.unwrap_or_else(|| format!("symlink-{}", gen_petname()).into()));
-                    std::os::unix::fs::symlink(original, link)?;
-                }
-
-                Ok(())
-            }
+        // A regular directory will just have it's contents made in `at` while a symlink will have
+        // it's contents in a destination directory in `symlinks`
+        let dir_loc = match kind {
+            DirKind::Normal => at,
+            DirKind::Symlink => symlinks,
         }
+        .join(&dir_name);
+        fs::create_dir(&dir_loc)?;
+
+        // Build all the entries
+        for entry in entry_list {
+            entry.try_build_at(&dir_loc, symlinks, broken_symlinks)?;
+        }
+
+        // Now actually create the symlink
+        if let DirKind::Symlink = kind {
+            let original = dir_loc;
+            let link =
+                at.join(&name.unwrap_or_else(|| format!("symlink-{}", gen_petname()).into()));
+
+            // TODO: setup CI for multiple platforms so that these differences can actually be
+            // tested
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(original, link)?;
+            #[cfg(windows)]
+            std::os::windows::fs::symlink_dir(original, link)?;
+        }
+
+        Ok(())
     }
 }

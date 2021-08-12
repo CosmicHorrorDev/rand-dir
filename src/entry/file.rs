@@ -9,6 +9,7 @@ use crate::{entry::CommonProp, utils::gen_petname};
 
 use rand::{random, thread_rng, Rng};
 
+// TODO: support symlinked files as well?
 #[derive(Default, Debug, Clone)]
 pub struct File {
     kind: FileKind,
