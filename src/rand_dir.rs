@@ -1,4 +1,4 @@
-use crate::entry::{BrokenSymlink, Dir, Entry, File};
+use crate::entry::{BrokenSymlink, Dir, File};
 
 use std::{
     fs, io,

@@ -24,21 +24,21 @@ use std::{
 /// being generated
 static GLOBAL_ENTRY_UNIQIFIER: Lazy<Arc<Mutex<u64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
 
-// FIXME: `Clone` here can mess up `Generated`. Cloning should bump up the counter
 /// This type is very similar to a plain `Option<PathBuf>` __except__ that the `None` variant holds
 /// a `u64` that is used to ensure uniqueness. This allows for implementing `Ord` or `Eq` which is
 /// required since a directories contents are represented with a `Set`
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum EntryName {
     Set(OsString),
     Generated(u64),
 }
 
-impl EntryName {
-    fn unwrap_or_else(self, f: impl FnOnce() -> OsString) -> OsString {
+// `Set` can be cloned normally, but `Generated` must use a new UUID to keep it unique
+impl Clone for EntryName {
+    fn clone(&self) -> Self {
         match self {
-            Self::Set(s) => s,
-            Self::Generated(_) => f(),
+            Self::Set(name) => Self::Set(name.clone()),
+            Self::Generated(_) => Self::default(),
         }
     }
 }
@@ -47,6 +47,15 @@ impl Default for EntryName {
     fn default() -> Self {
         let current_val = next_global_counter(&GLOBAL_ENTRY_UNIQIFIER);
         Self::Generated(current_val)
+    }
+}
+
+impl EntryName {
+    fn unwrap_or_else(self, f: impl FnOnce() -> OsString) -> OsString {
+        match self {
+            Self::Set(s) => s,
+            Self::Generated(_) => f(),
+        }
     }
 }
 
